@@ -1,4 +1,4 @@
-# `canvaspadslibs/wnd` - Rust window handling library
+# `wnd` - Rust window handling library
 
 Cross-platform windowing library for Rust.
 
