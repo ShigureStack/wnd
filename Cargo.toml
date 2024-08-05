@@ -1,8 +1,7 @@
 [workspace]
 resolver = "2"
-members = [
-  "crates/wnd",
-]
+members = ["crates/wnd"]
 
 [workspace.dependencies]
+windows = "0.58.0"
 raw-window-handle = "0.6"
