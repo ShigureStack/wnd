@@ -1,5 +1,8 @@
+use std::{borrow::BorrowMut, cell::Cell, mem::transmute};
+
 use windows::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, WPARAM},
+    Graphics::Gdi::UpdateWindow,
     System::LibraryLoader::GetModuleHandleW,
     UI::{
         HiDpi::{
@@ -7,16 +10,22 @@ use windows::Win32::{
             DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
         },
         WindowsAndMessaging::{
-            CreateWindowExW, DefWindowProcW, LoadCursorW, RegisterClassW, SetWindowPos, ShowWindow,
-            CS_HREDRAW, CS_VREDRAW, IDI_APPLICATION, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER,
-            SW_SHOW, WINDOW_EX_STYLE, WNDCLASSW, WS_OVERLAPPEDWINDOW,
+            CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, LoadCursorW,
+            PeekMessageW, PostQuitMessage, RegisterClassW, SetWindowPos, ShowWindow,
+            TranslateMessage, CS_HREDRAW, CS_VREDRAW, IDI_APPLICATION, MSG, PM_REMOVE,
+            SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, SW_SHOW, WINDOW_EX_STYLE, WM_DESTROY,
+            WM_QUIT, WNDCLASSW, WS_OVERLAPPEDWINDOW,
         },
     },
 };
 
-use crate::driver::{
-    error::{CreateWindowError, WindowHandlerError, WindowHandlerResult},
-    win32::utils::string::ToUTF16String,
+use crate::{
+    driver::{
+        error::{CreateWindowError, WindowHandlerError, WindowHandlerResult},
+        runner::ReturnCode,
+        win32::utils::string::StringExt,
+    },
+    event::Event,
 };
 
 pub struct NativeWindow {
@@ -25,7 +34,6 @@ pub struct NativeWindow {
 
 impl NativeWindow {
     pub fn new() -> WindowHandlerResult<Self> {
-        Self::enable_hidpi_support();
         let hwnd = match Self::create_window() {
             Ok(hwnd) => hwnd,
             Err(err) => return Err(WindowHandlerError::CreateWindowError(err)),
@@ -34,17 +42,19 @@ impl NativeWindow {
         Ok(Self { hwnd })
     }
 
-    fn enable_hidpi_support() {
-        unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
-    }
-
     unsafe extern "system" fn wndproc(
         hwnd: HWND,
         u_msg: u32,
         w_param: WPARAM,
         l_param: LPARAM,
     ) -> LRESULT {
-        DefWindowProcW(hwnd, u_msg, w_param, l_param)
+        match u_msg {
+            WM_DESTROY => {
+                PostQuitMessage(0);
+                return LRESULT(0);
+            }
+            _ => DefWindowProcW(hwnd, u_msg, w_param, l_param),
+        }
     }
 
     fn create_window() -> Result<HWND, CreateWindowError> {
@@ -92,8 +102,8 @@ impl NativeWindow {
                 None,
                 0,
                 0,
-                (10 as f32 * dpi / 96.0) as i32,
-                (10 as f32 * dpi / 96.0) as i32,
+                (100 as f32 * dpi / 96.0) as i32,
+                (100 as f32 * dpi / 96.0) as i32,
                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
             )
         } {
@@ -102,6 +112,7 @@ impl NativeWindow {
         }
 
         let _ = unsafe { ShowWindow(hwnd, SW_SHOW) };
+        let _ = unsafe { UpdateWindow(hwnd) };
 
         Ok(hwnd)
     }
@@ -109,6 +120,48 @@ impl NativeWindow {
     pub fn set_title(&self, title: &str) {}
 
     pub fn get_title(&self) {}
+}
+
+pub(crate) struct EventRunner {
+    handler: Cell<Option<Box<dyn FnMut(Event) -> ()>>>,
+}
+
+impl EventRunner {
+    pub fn new() -> Self {
+        Self::enable_hidpi_support();
+
+        Self {
+            handler: Cell::new(None),
+        }
+    }
+
+    fn enable_hidpi_support() {
+        unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+    }
+
+    pub fn register_handler<F: FnMut(Event) -> ()>(&self, handler: F) {
+        // Erase lifetime
+        let handler =
+            unsafe { transmute::<Box<dyn FnMut(Event)>, Box<dyn FnMut(Event)>>(Box::new(handler)) };
+        // Resetting an event handler without before clearing is prohibited.
+        assert!(self.handler.replace(Some(handler)).is_none());
+    }
+
+    pub fn dispatch_events(&self) -> Option<ReturnCode> {
+        let mut msg = MSG::default();
+
+        unsafe {
+            if PeekMessageW(msg.borrow_mut(), None, 0, 0, PM_REMOVE).as_bool() {
+                let _ = TranslateMessage(msg.borrow_mut());
+                DispatchMessageW(msg.borrow_mut());
+
+                if msg.message == WM_QUIT {
+                    return Some(ReturnCode::Exit);
+                }
+            }
+        }
+        None
+    }
 }
 
 #[cfg(test)]
@@ -119,7 +172,4 @@ mod test {
     fn create_window() {
         assert!(NativeWindow::new().is_ok());
     }
-
-    #[test]
-    fn window_loop() {}
 }

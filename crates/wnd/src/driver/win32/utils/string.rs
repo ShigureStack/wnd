@@ -1,12 +1,12 @@
 use windows::core::PCWSTR;
 
-pub trait ToUTF16String {
+pub trait StringExt {
     fn to_utf16(&self) -> Vec<u16>;
 
     fn to_pcwstr(&self) -> PCWSTR;
 }
 
-impl ToUTF16String for String {
+impl StringExt for String {
     fn to_utf16(&self) -> Vec<u16> {
         self.encode_utf16().chain([0u16]).collect::<Vec<u16>>()
     }
