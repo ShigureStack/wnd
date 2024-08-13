@@ -120,6 +120,19 @@ impl NativeWindow {
     pub fn set_title(&self, title: &str) {}
 
     pub fn get_title(&self) {}
+
+    pub fn rwh(
+        &self,
+    ) -> Result<raw_window_handle::RawWindowHandle, raw_window_handle::HandleError> {
+        let mut window_handle = raw_window_handle::Win32WindowHandle::new(unsafe {
+            std::num::NonZeroIsize::new_unchecked(self.hwnd.0 as _)
+        });
+
+        //TODO: Get correct hinstance
+        let hinstance = unsafe { GetModuleHandleW(None) }.unwrap();
+        window_handle.hinstance = std::num::NonZeroIsize::new(hinstance.0 as _);
+        Ok(raw_window_handle::RawWindowHandle::Win32(window_handle))
+    }
 }
 
 pub(crate) struct EventRunner {

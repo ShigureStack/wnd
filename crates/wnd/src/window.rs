@@ -1,3 +1,5 @@
+use raw_window_handle::{HandleError, HasWindowHandle, WindowHandle};
+
 use crate::driver::{self, error::WindowHandlerError};
 
 pub struct Window {
@@ -27,5 +29,13 @@ impl Window {
 
     pub fn get_title(&self) {
         self.handler.get_title()
+    }
+}
+
+impl HasWindowHandle for Window {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        let raw = self.handler.rwh()?;
+
+        Ok(unsafe { WindowHandle::borrow_raw(raw) })
     }
 }
