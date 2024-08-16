@@ -3,7 +3,8 @@ resolver = "2"
 members = ["crates/wnd"]
 
 [workspace.package]
-version = "0.0.0"
+version = "0.0.1-pre.1"
+license = "Apache-2.0"
 
 [workspace.dependencies]
 windows = "0.58.0"

@@ -2,6 +2,8 @@
 name = "wnd"
 version = { workspace = true }
 edition = "2021"
+description = "Create and handle native windows."
+license = { workspace = true }
 
 [dependencies]
 raw-window-handle = { workspace = true }
