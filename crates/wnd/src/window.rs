@@ -23,6 +23,10 @@ impl Window {
         Ok(Self { handler })
     }
 
+    pub fn apply_system_appearance(&self) {
+        self.handler.apply_system_appearance();
+    }
+
     pub fn set_title(&self, title: &str) {
         self.handler.set_title(title);
     }
