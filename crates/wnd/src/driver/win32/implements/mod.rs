@@ -1,5 +1,6 @@
 use std::{borrow::BorrowMut, cell::Cell, mem::transmute};
-
+use std::mem::size_of;
+use windows::core::imp::BOOL;
 use windows::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, WPARAM},
     Graphics::Gdi::UpdateWindow,
@@ -18,7 +19,11 @@ use windows::Win32::{
         },
     },
 };
-
+use windows::Win32::Foundation::{COLORREF, FALSE};
+use windows::Win32::Graphics::Dwm::{DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMSBT_MAINWINDOW, DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW, DWMWA_CLOAK, DWMWA_SYSTEMBACKDROP_TYPE, DWM_SYSTEMBACKDROP_TYPE};
+use windows::Win32::Graphics::Gdi::{CreateSolidBrush, InvalidateRect, RedrawWindow, COLOR_WINDOWFRAME, HBRUSH, RDW_ERASE, RDW_ERASENOW, RDW_INVALIDATE, RDW_UPDATENOW};
+use windows::Win32::UI::Controls::MARGINS;
+use windows::Win32::UI::WindowsAndMessaging::{SWP_NOREDRAW, SWP_NOSIZE, WM_PAINT};
 use crate::{
     driver::{
         error::{CreateWindowError, WindowHandlerError, WindowHandlerResult},
@@ -34,7 +39,7 @@ pub struct NativeWindow {
 
 impl NativeWindow {
     pub fn new() -> WindowHandlerResult<Self> {
-        let hwnd = match Self::create_window() {
+        let hwnd = match Self::create_window(0, 0, 640, 480) {
             Ok(hwnd) => hwnd,
             Err(err) => return Err(WindowHandlerError::CreateWindowError(err)),
         };
@@ -49,15 +54,19 @@ impl NativeWindow {
         l_param: LPARAM,
     ) -> LRESULT {
         match u_msg {
+            WM_PAINT => {
+                let _ = InvalidateRect(hwnd, None, true);
+                DefWindowProcW(hwnd, u_msg, w_param, l_param)
+            }
             WM_DESTROY => {
                 PostQuitMessage(0);
-                return LRESULT(0);
+                LRESULT(0)
             }
             _ => DefWindowProcW(hwnd, u_msg, w_param, l_param),
         }
     }
 
-    fn create_window() -> Result<HWND, CreateWindowError> {
+    fn create_window(x: i32, y: i32, width: i32, height: i32) -> Result<HWND, CreateWindowError> {
         let classname = String::from("wndp").to_pcwstr();
         let hinstance = unsafe { GetModuleHandleW(None) }.unwrap();
 
@@ -68,20 +77,23 @@ impl NativeWindow {
                 hInstance: hinstance.into(),
                 lpszClassName: classname,
                 hCursor: LoadCursorW(None, IDI_APPLICATION).unwrap(),
+                hbrBackground: CreateSolidBrush(COLORREF(0x000000)),
                 ..Default::default()
             }
         };
 
         unsafe { RegisterClassW(&class) };
 
+        let mut title = String::from("aaa");
+
         let hwnd = match unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 classname,
-                String::new().to_pcwstr(),
+                title.to_pcwstr(),
                 WS_OVERLAPPEDWINDOW,
-                0,
-                0,
+                x,
+                y,
                 0,
                 0,
                 None,
@@ -102,9 +114,9 @@ impl NativeWindow {
                 None,
                 0,
                 0,
-                (100 as f32 * dpi / 96.0) as i32,
-                (100 as f32 * dpi / 96.0) as i32,
-                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
+                (width as f32 * dpi / 96.0) as i32,
+                (height as f32 * dpi / 96.0) as i32,
+                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW,
             )
         } {
             Err(..) => return Err(CreateWindowError::UnableToEnableHiDpiSupport),
@@ -120,6 +132,20 @@ impl NativeWindow {
     pub fn set_title(&self, title: &str) {}
 
     pub fn get_title(&self) {}
+
+    pub fn apply_system_appearance(&self) {
+        let margin = MARGINS {
+            cxLeftWidth: -1,
+            cxRightWidth: -1,
+            cyBottomHeight: -1,
+            cyTopHeight: -1,
+        };
+
+        let _ = unsafe { DwmExtendFrameIntoClientArea(self.hwnd, &margin) };
+
+        let mut backdrop = DWMSBT_MAINWINDOW;
+        let _ = unsafe { DwmSetWindowAttribute(self.hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &mut backdrop as *mut _ as _, size_of::<DWM_SYSTEMBACKDROP_TYPE>() as _) };
+    }
 
     pub fn rwh(
         &self,

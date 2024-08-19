@@ -62,7 +62,9 @@ mod test {
 
         impl EventHandler for App {
             fn init(&mut self, context: &Context) {
-                self.window = Some(context.create_window().expect("unable to create window"))
+                let window = context.create_window().expect("unable to create window");
+                window.apply_system_appearance();
+                self.window = Some(window);
             }
             fn window_event(&mut self, context: &Context, window: &Window, event: Event) {}
         }
