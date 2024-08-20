@@ -1,5 +1,4 @@
 pub mod error;
-pub mod runner;
 pub mod win32;
 
 #[cfg(target_os = "windows")]

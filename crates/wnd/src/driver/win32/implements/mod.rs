@@ -26,10 +26,9 @@ use windows::Win32::{
 use crate::{
     driver::{
         error::{CreateWindowError, WindowHandlerError, WindowHandlerResult},
-        runner::ReturnCode,
         win32::utils::string::StringExt,
     },
-    event::Event,
+    event::{Event, ReturnCode},
 };
 use crate::window::WindowInitialInfo;
 

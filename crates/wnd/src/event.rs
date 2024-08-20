@@ -1,10 +1,11 @@
 use std::sync::Arc;
 use crate::{
-    driver::{runner::ReturnCode, EventRunner},
+    driver::EventRunner,
     window::{Window, WindowResult},
 };
 use crate::window::WindowInitialInfo;
 
+/// Provides methods to create and modify windows.
 pub struct Context {
     pub(crate) runner: Arc<EventRunner>,
 }
@@ -23,6 +24,56 @@ impl Context {
 
 pub enum Event {}
 
+pub enum ReturnCode {
+    Exit,
+}
+
+/// Dispatches events and ships them to related handlers.
+///
+/// # Create an event loop
+///
+/// First, you need to create [`EvnetDispatcher`] instance.
+///
+/// ```no_run
+/// use wnd::event::EventDispatcher;
+///
+///
+/// let dispatcher = EventDispatcher::new();
+///
+/// ```
+///
+/// # Register a handler
+///
+/// ```no_run
+/// use wnd::event::EventHandler;
+///
+/// struct App {}
+///
+/// impl EventHandler for App {
+///    // ...
+/// }
+///
+/// dispatcher.with_handler(App::default());
+/// ```
+///
+/// To run window, normally, you need to call [`dispatch`]
+/// on an application main loop to dispatching window events.
+///
+/// ```no_run
+/// use wnd::event::ReturnCode;
+///
+/// loop {
+///     match dispatcher.dispatch() {
+///
+///         Some(code) => match code {
+///             ReturnCode::Exit => break,
+///         },
+///         _ => {}
+///     }
+/// }
+/// ```
+///
+/// Note: Currently [`EventDispatcher`] can be used on the same thread.
 pub struct EventDispatcher {
     context: Context,
 }
@@ -44,6 +95,7 @@ impl EventDispatcher {
     }
 }
 
+/// Functions are must be running on the same thread.
 pub trait EventHandler {
     fn init(&mut self, context: &Context);
     fn window_event(&mut self, context: &Context, window: &Window, event: Event);
