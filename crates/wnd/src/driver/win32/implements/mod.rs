@@ -1,10 +1,10 @@
 use std::{borrow::BorrowMut, cell::Cell, mem::transmute};
 use std::mem::size_of;
-use windows::core::imp::BOOL;
+use std::sync::{Arc, RwLock};
 use windows::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, WPARAM, COLORREF},
     Graphics::{Gdi::{UpdateWindow, CreateSolidBrush, InvalidateRect}, Dwm::{
-        DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMSBT_MAINWINDOW, DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW, DWMWA_CLOAK, DWMWA_SYSTEMBACKDROP_TYPE, DWM_SYSTEMBACKDROP_TYPE
+        DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMSBT_MAINWINDOW, DWMWA_SYSTEMBACKDROP_TYPE, DWM_SYSTEMBACKDROP_TYPE
     },
     },
     System::LibraryLoader::GetModuleHandleW,
@@ -15,11 +15,11 @@ use windows::Win32::{
             DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
         },
         WindowsAndMessaging::{
-            CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, LoadCursorW,
+            CreateWindowExW, DefWindowProcW, DispatchMessageW, LoadCursorW,
             PeekMessageW, PostQuitMessage, RegisterClassW, SetWindowPos, ShowWindow,
             TranslateMessage, CS_HREDRAW, CS_VREDRAW, IDI_APPLICATION, MSG, PM_REMOVE,
             SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, SW_SHOW, WINDOW_EX_STYLE, WM_DESTROY,
-            WM_QUIT, WNDCLASSW, WS_OVERLAPPEDWINDOW, CREATESTRUCTW, SWP_NOREDRAW, SWP_NOSIZE, WM_PAINT, WM_CREATE
+            WM_QUIT, WNDCLASSW, WS_OVERLAPPEDWINDOW, CREATESTRUCTW, SWP_NOREDRAW, WM_PAINT, WM_CREATE
         },
     },
 };
@@ -29,21 +29,28 @@ use crate::{
         runner::ReturnCode,
         win32::utils::string::StringExt,
     },
-    event::{Event, Context},
+    event::Event,
 };
 
 pub struct NativeWindow {
     hwnd: HWND,
 }
 
-struct WindowUserData<'a> {
-    context: &'a Context,
+struct WindowState {
+
 }
 
-impl<'a> WindowUserData<'a> {
-    pub fn new(context: &'a Context) -> Self {
+struct WindowUserData {
+    state: RwLock<WindowState>,
+    /// EventRunner is owned by EventLoop
+    runner: Arc<EventRunner>,
+}
+
+impl WindowUserData {
+    pub fn new(runner: Arc<EventRunner>) -> Self {
         Self {
-            context
+            state: RwLock::new(WindowState {}),
+            runner,
         }
     }
 }
@@ -58,7 +65,7 @@ unsafe extern "system" fn wndproc(
     match u_msg {
         WM_CREATE => {
             let cs = l_param.0 as *const CREATESTRUCTW;
-            ud = Some(unsafe { (*cs).lpCreateParams as *mut WindowUserData<'_> });
+            ud = Some(unsafe { (*cs).lpCreateParams as *mut WindowUserData });
             DefWindowProcW(hwnd, u_msg, w_param, l_param)
         }
         WM_PAINT => {
@@ -74,8 +81,8 @@ unsafe extern "system" fn wndproc(
 }
 
 impl NativeWindow {
-    pub fn new(context: &Context) -> WindowHandlerResult<Self> {
-        let hwnd = match Self::create_window(context, 0, 0, 640, 480) {
+    pub fn new(runner: Arc<EventRunner>) -> WindowHandlerResult<Self> {
+        let hwnd = match Self::create_window(runner, 0, 0, 640, 480) {
             Ok(hwnd) => hwnd,
             Err(err) => return Err(WindowHandlerError::CreateWindowError(err)),
         };
@@ -83,7 +90,7 @@ impl NativeWindow {
         Ok(Self { hwnd })
     }
 
-    fn create_window(context: &Context, x: i32, y: i32, width: i32, height: i32) -> Result<HWND, CreateWindowError> {
+    fn create_window(runner: Arc<EventRunner>, x: i32, y: i32, width: i32, height: i32) -> Result<HWND, CreateWindowError> {
         let classname = String::from("wndp").to_pcwstr();
         let hinstance = unsafe { GetModuleHandleW(None) }.unwrap();
 
@@ -101,7 +108,7 @@ impl NativeWindow {
 
         unsafe { RegisterClassW(&class) };
 
-        let mut userdata = WindowUserData::new(context);
+        let mut userdata = WindowUserData::new(runner);
         let mut title = String::from("aaa");
 
         let hwnd = match unsafe {

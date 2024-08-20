@@ -1,21 +1,22 @@
+use std::sync::Arc;
 use crate::{
     driver::{runner::ReturnCode, EventRunner},
     window::{Window, WindowResult},
 };
 
 pub struct Context {
-    pub(crate) runner: EventRunner,
+    pub(crate) runner: Arc<EventRunner>,
 }
 
 impl Context {
     pub fn new() -> Self {
         Self {
-            runner: EventRunner::new(),
+            runner: Arc::new(EventRunner::new()),
         }
     }
 
     pub fn create_window(&self) -> WindowResult<Window> {
-        Window::new(self)
+        Window::new(self.runner.clone())
     }
 }
 

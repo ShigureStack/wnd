@@ -1,6 +1,7 @@
+use std::sync::Arc;
 use raw_window_handle::{HandleError, HasWindowHandle, WindowHandle};
 
-use crate::driver::{self, error::WindowHandlerError};
+use crate::driver::{self, error::WindowHandlerError, EventRunner};
 use crate::event::Context;
 
 pub struct Window {
@@ -15,8 +16,8 @@ pub enum WindowError {
 pub type WindowResult<T> = Result<T, WindowError>;
 
 impl Window {
-    pub fn new(context: &Context) -> WindowResult<Self> {
-        let handler = match driver::WindowHandler::new(context) {
+    pub fn new(runner: Arc<EventRunner>) -> WindowResult<Self> {
+        let handler = match driver::WindowHandler::new(runner) {
             Ok(handler) => handler,
             Err(err) => return Err(WindowError::WindowHandlerError(err)),
         };
