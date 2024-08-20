@@ -31,6 +31,7 @@ use crate::{
     },
     event::Event,
 };
+use crate::window::WindowInitialInfo;
 
 pub struct NativeWindow {
     hwnd: HWND,
@@ -81,8 +82,8 @@ unsafe extern "system" fn wndproc(
 }
 
 impl NativeWindow {
-    pub fn new(runner: Arc<EventRunner>) -> WindowHandlerResult<Self> {
-        let hwnd = match Self::create_window(runner, 0, 0, 640, 480) {
+    pub fn new(runner: Arc<EventRunner>, info: WindowInitialInfo) -> WindowHandlerResult<Self> {
+        let hwnd = match Self::create_window(runner, info.pos_x, info.pos_y, info.width, info.height, info.title) {
             Ok(hwnd) => hwnd,
             Err(err) => return Err(WindowHandlerError::CreateWindowError(err)),
         };
@@ -90,7 +91,7 @@ impl NativeWindow {
         Ok(Self { hwnd })
     }
 
-    fn create_window(runner: Arc<EventRunner>, x: i32, y: i32, width: i32, height: i32) -> Result<HWND, CreateWindowError> {
+    fn create_window(runner: Arc<EventRunner>, x: i32, y: i32, width: i32, height: i32, title: &str) -> Result<HWND, CreateWindowError> {
         let classname = String::from("wndp").to_pcwstr();
         let hinstance = unsafe { GetModuleHandleW(None) }.unwrap();
 
@@ -109,7 +110,7 @@ impl NativeWindow {
         unsafe { RegisterClassW(&class) };
 
         let mut userdata = WindowUserData::new(runner);
-        let mut title = String::from("aaa");
+        let mut title = String::from(title);
 
         let hwnd = match unsafe {
             CreateWindowExW(

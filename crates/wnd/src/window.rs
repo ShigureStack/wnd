@@ -15,9 +15,17 @@ pub enum WindowError {
 
 pub type WindowResult<T> = Result<T, WindowError>;
 
+pub struct WindowInitialInfo<'a> {
+    pub pos_x: i32,
+    pub pos_y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub title: &'a str,
+}
+
 impl Window {
-    pub fn new(runner: Arc<EventRunner>) -> WindowResult<Self> {
-        let handler = match driver::WindowHandler::new(runner) {
+    pub fn new(runner: Arc<EventRunner>, info: WindowInitialInfo) -> WindowResult<Self> {
+        let handler = match driver::WindowHandler::new(runner, info) {
             Ok(handler) => handler,
             Err(err) => return Err(WindowError::WindowHandlerError(err)),
         };

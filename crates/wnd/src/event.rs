@@ -3,6 +3,7 @@ use crate::{
     driver::{runner::ReturnCode, EventRunner},
     window::{Window, WindowResult},
 };
+use crate::window::WindowInitialInfo;
 
 pub struct Context {
     pub(crate) runner: Arc<EventRunner>,
@@ -15,8 +16,8 @@ impl Context {
         }
     }
 
-    pub fn create_window(&self) -> WindowResult<Window> {
-        Window::new(self.runner.clone())
+    pub fn create_window(&self, info: WindowInitialInfo) -> WindowResult<Window> {
+        Window::new(self.runner.clone(), info)
     }
 }
 
@@ -63,7 +64,14 @@ mod test {
 
         impl EventHandler for App {
             fn init(&mut self, context: &Context) {
-                let window = context.create_window().expect("unable to create window");
+                let info = WindowInitialInfo {
+                    pos_x: 0,
+                    pos_y: 0,
+                    width: 640,
+                    height: 480,
+                    title: "wnd test",
+                };
+                let window = context.create_window(info).expect("unable to create window");
                 window.apply_system_appearance();
                 self.window = Some(window);
             }
