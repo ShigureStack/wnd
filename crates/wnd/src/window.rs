@@ -2,7 +2,6 @@ use std::sync::Arc;
 use raw_window_handle::{HandleError, HasWindowHandle, WindowHandle};
 
 use crate::driver::{self, error::WindowHandlerError, EventRunner};
-use crate::event::Context;
 
 pub struct Window {
     handler: driver::WindowHandler,
