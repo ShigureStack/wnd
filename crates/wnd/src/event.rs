@@ -35,32 +35,24 @@ pub enum ReturnCode {
 /// First, you need to create [`EvnetDispatcher`] instance.
 ///
 /// ```no_run
-/// use wnd::event::EventDispatcher;
-///
-///
-/// let dispatcher = EventDispatcher::new();
-///
-/// ```
-///
-/// # Register a handler
-///
-/// ```no_run
-/// use wnd::event::EventHandler;
+/// use wnd::event::{Context, Event, EventDispatcher, EventHandler, ReturnCode};
+/// use wnd::window::Window;
 ///
 /// struct App {}
 ///
 /// impl EventHandler for App {
-///    // ...
+///     fn init(&mut self, context: &Context) {
+///         todo!()
+///     }
+///
+///     fn window_event(&mut self, context: &Context, window: &Window, event: Event) {
+///         todo!()
+///     }
 /// }
 ///
-/// dispatcher.with_handler(App::default());
-/// ```
+/// let dispatcher = EventDispatcher::new();
 ///
-/// To run window, normally, you need to call [`dispatch`]
-/// on an application main loop to dispatching window events.
-///
-/// ```no_run
-/// use wnd::event::ReturnCode;
+/// dispatcher.with_handler(App {});
 ///
 /// loop {
 ///     match dispatcher.dispatch() {
@@ -73,7 +65,12 @@ pub enum ReturnCode {
 /// }
 /// ```
 ///
-/// Note: Currently [`EventDispatcher`] can be used on the same thread.
+/// Next, you must register an application instance that implements [`EventHandler`] trait.
+///
+/// To run window, normally, you need to call [`dispatch`]
+/// on an application main loop to dispatching window events.
+///
+/// Note: Currently `EventDispatcher` can be used on the same thread.
 pub struct EventDispatcher {
     context: Context,
 }
