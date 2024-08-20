@@ -15,7 +15,7 @@ impl Context {
     }
 
     pub fn create_window(&self) -> WindowResult<Window> {
-        Window::new()
+        Window::new(self)
     }
 }
 

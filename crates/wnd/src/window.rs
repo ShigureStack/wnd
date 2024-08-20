@@ -1,6 +1,7 @@
 use raw_window_handle::{HandleError, HasWindowHandle, WindowHandle};
 
 use crate::driver::{self, error::WindowHandlerError};
+use crate::event::Context;
 
 pub struct Window {
     handler: driver::WindowHandler,
@@ -14,8 +15,8 @@ pub enum WindowError {
 pub type WindowResult<T> = Result<T, WindowError>;
 
 impl Window {
-    pub fn new() -> WindowResult<Self> {
-        let handler = match driver::WindowHandler::new() {
+    pub fn new(context: &Context) -> WindowResult<Self> {
+        let handler = match driver::WindowHandler::new(context) {
             Ok(handler) => handler,
             Err(err) => return Err(WindowError::WindowHandlerError(err)),
         };
