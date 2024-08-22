@@ -46,7 +46,6 @@ struct WindowUserData {
     state: RwLock<WindowState>,
     /// EventRunner is owned by EventLoop
     runner: Arc<EventRunner>,
-    s: String,
 }
 
 impl WindowUserData {
@@ -54,7 +53,6 @@ impl WindowUserData {
         Self {
             state: RwLock::new(WindowState {}),
             runner,
-            s: String::from("hi")
         }
     }
 }
@@ -74,8 +72,6 @@ unsafe extern "system" fn wndproc(
     let ud = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const WindowUserData;
     if ud.is_null() {
         return DefWindowProcW(hwnd, u_msg, w_param, l_param);
-    } else {
-        println!("{}", (*ud).s);
     }
 
     let ud = &*(ud);
