@@ -118,7 +118,7 @@ mod test {
                     pos_y: 0,
                     width: 640,
                     height: 480,
-                    title: "wnd test",
+                    title: String::from("wnd test"),
                 };
                 let window = context.create_window(info).expect("unable to create window");
                 window.apply_system_appearance();

@@ -1,6 +1,7 @@
-use std::{borrow::BorrowMut, cell::Cell, mem::transmute};
+use std::{borrow::BorrowMut, cell::Cell, default, mem, mem::transmute};
 use std::mem::size_of;
 use std::sync::{Arc, RwLock};
+use windows::core::PCWSTR;
 use windows::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, WPARAM, COLORREF},
     Graphics::{Gdi::{UpdateWindow, CreateSolidBrush, InvalidateRect}, Dwm::{
@@ -23,7 +24,7 @@ use windows::Win32::{
         },
     },
 };
-use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrW, SetWindowLongPtrW, GWLP_USERDATA};
+use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrW, RegisterClassExW, SetWindowLongPtrW, GWLP_USERDATA, WNDCLASSEXW};
 use crate::{
     driver::{
         error::{CreateWindowError, WindowHandlerError, WindowHandlerResult},
@@ -35,7 +36,6 @@ use crate::window::WindowInitialInfo;
 
 pub struct NativeWindow {
     hwnd: HWND,
-    userdata: WindowUserData,
 }
 
 struct WindowState {
@@ -46,6 +46,7 @@ struct WindowUserData {
     state: RwLock<WindowState>,
     /// EventRunner is owned by EventLoop
     runner: Arc<EventRunner>,
+    s: String,
 }
 
 impl WindowUserData {
@@ -53,6 +54,7 @@ impl WindowUserData {
         Self {
             state: RwLock::new(WindowState {}),
             runner,
+            s: String::from("hi")
         }
     }
 }
@@ -64,11 +66,20 @@ unsafe extern "system" fn wndproc(
     l_param: LPARAM,
 ) -> LRESULT {
     if u_msg == WM_CREATE {
-        let cs = l_param.0 as *const CREATESTRUCTW;
-        let ud = (*cs).lpCreateParams;
+        let cs = &*(l_param.0 as *const CREATESTRUCTW);
+        let ud = cs.lpCreateParams;
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, ud as _);
     }
+
     let ud = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const WindowUserData;
+    if ud.is_null() {
+        return DefWindowProcW(hwnd, u_msg, w_param, l_param);
+    } else {
+        println!("{}", (*ud).s);
+    }
+
+    let ud = &*(ud);
+
     match u_msg {
         WM_PAINT => {
             let _ = InvalidateRect(hwnd, None, true);
@@ -84,53 +95,64 @@ unsafe extern "system" fn wndproc(
 
 impl NativeWindow {
     pub fn new(runner: Arc<EventRunner>, info: WindowInitialInfo) -> WindowHandlerResult<Self> {
-        let userdata = WindowUserData::new(runner.clone());
-        let hwnd = match Self::create_window(runner, &userdata, info.pos_x, info.pos_y, info.width, info.height, info.title) {
+        let hwnd = match Self::create_window(runner, &info) {
             Ok(hwnd) => hwnd,
             Err(err) => return Err(WindowHandlerError::CreateWindowError(err)),
         };
 
-        Ok(Self { hwnd, userdata })
+        Ok(Self { hwnd })
     }
 
-    fn create_window(runner: Arc<EventRunner>, userdata: &WindowUserData, x: i32, y: i32, width: i32, height: i32, title: &str) -> Result<HWND, CreateWindowError> {
+    fn create_window(runner: Arc<EventRunner>, info: &WindowInitialInfo) -> Result<HWND, CreateWindowError> {
         let classname = String::from("ryswn").to_pcwstr();
-        let hinstance = unsafe { GetModuleHandleW(None) }.unwrap();
+        let hinstance = match unsafe { GetModuleHandleW(None) } {
+            Ok(h) => h,
+            Err(e) => {
+                panic!("fatal: failed to get hinstance: {}", e.message());
+            }
+        };
 
-        let class = unsafe {
-            WNDCLASSW {
+        let mut class = unsafe {
+            WNDCLASSEXW {
                 style: CS_HREDRAW | CS_VREDRAW,
                 lpfnWndProc: Some(wndproc),
+                cbClsExtra: 0,
+                cbWndExtra: 0,
+                cbSize: mem::size_of::<WNDCLASSEXW>() as _,
                 hInstance: hinstance.into(),
                 lpszClassName: classname,
+                lpszMenuName: PCWSTR::null(),
                 hCursor: LoadCursorW(None, IDI_APPLICATION).unwrap(),
                 hbrBackground: CreateSolidBrush(COLORREF(0x000000)),
                 ..Default::default()
             }
         };
 
-        unsafe { RegisterClassW(&class) };
+        assert_ne!(unsafe { RegisterClassExW(&class) }, 0, "RegisterClassExW returns 0");
 
-        let title = String::from(title).to_pcwstr();
+        let userdata = Arc::new(WindowUserData::new(runner.clone()));
 
         let hwnd = match unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 classname,
-                title,
+                info.title.to_pcwstr(),
                 WS_OVERLAPPEDWINDOW,
-                x,
-                y,
-                0,
-                0,
+                info.pos_x,
+                info.pos_y,
+                1,
+                1,
                 None,
                 None,
                 hinstance,
-                Some(userdata as *const _ as _),
+                Some(Arc::into_raw(userdata) as _),
             )
         } {
             Ok(hwnd) => hwnd,
-            Err(..) => return Err(CreateWindowError::FailedToCreateWindow),
+            Err(e) => {
+                println!("fatal: {}", e.message());
+                return Err(CreateWindowError::FailedToCreateWindow)
+            },
         };
 
         let dpi = unsafe { GetDpiForWindow(hwnd) as f32 };
@@ -141,8 +163,8 @@ impl NativeWindow {
                 None,
                 0,
                 0,
-                (width as f32 * dpi / 96.0) as i32,
-                (height as f32 * dpi / 96.0) as i32,
+                (info.width as f32 * dpi / 96.0) as i32,
+                (info.height as f32 * dpi / 96.0) as i32,
                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW,
             )
         } {

@@ -14,12 +14,12 @@ pub enum WindowError {
 
 pub type WindowResult<T> = Result<T, WindowError>;
 
-pub struct WindowInitialInfo<'a> {
+pub struct WindowInitialInfo {
     pub pos_x: i32,
     pub pos_y: i32,
     pub width: i32,
     pub height: i32,
-    pub title: &'a str,
+    pub title: String,
 }
 
 impl Window {
