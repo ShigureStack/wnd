@@ -23,6 +23,7 @@ use windows::Win32::{
         },
     },
 };
+use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrW, SetWindowLongPtrW, GWLP_USERDATA};
 use crate::{
     driver::{
         error::{CreateWindowError, WindowHandlerError, WindowHandlerResult},
@@ -34,6 +35,7 @@ use crate::window::WindowInitialInfo;
 
 pub struct NativeWindow {
     hwnd: HWND,
+    userdata: WindowUserData,
 }
 
 struct WindowState {
@@ -61,13 +63,13 @@ unsafe extern "system" fn wndproc(
     w_param: WPARAM,
     l_param: LPARAM,
 ) -> LRESULT {
-    let mut ud: Option<*mut WindowUserData> = None;
+    if u_msg == WM_CREATE {
+        let cs = l_param.0 as *const CREATESTRUCTW;
+        let ud = (*cs).lpCreateParams;
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, ud as _);
+    }
+    let ud = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const WindowUserData;
     match u_msg {
-        WM_CREATE => {
-            let cs = l_param.0 as *const CREATESTRUCTW;
-            ud = Some(unsafe { (*cs).lpCreateParams as *mut WindowUserData });
-            DefWindowProcW(hwnd, u_msg, w_param, l_param)
-        }
         WM_PAINT => {
             let _ = InvalidateRect(hwnd, None, true);
             DefWindowProcW(hwnd, u_msg, w_param, l_param)
@@ -82,16 +84,17 @@ unsafe extern "system" fn wndproc(
 
 impl NativeWindow {
     pub fn new(runner: Arc<EventRunner>, info: WindowInitialInfo) -> WindowHandlerResult<Self> {
-        let hwnd = match Self::create_window(runner, info.pos_x, info.pos_y, info.width, info.height, info.title) {
+        let userdata = WindowUserData::new(runner.clone());
+        let hwnd = match Self::create_window(runner, &userdata, info.pos_x, info.pos_y, info.width, info.height, info.title) {
             Ok(hwnd) => hwnd,
             Err(err) => return Err(WindowHandlerError::CreateWindowError(err)),
         };
 
-        Ok(Self { hwnd })
+        Ok(Self { hwnd, userdata })
     }
 
-    fn create_window(runner: Arc<EventRunner>, x: i32, y: i32, width: i32, height: i32, title: &str) -> Result<HWND, CreateWindowError> {
-        let classname = String::from("wndp").to_pcwstr();
+    fn create_window(runner: Arc<EventRunner>, userdata: &WindowUserData, x: i32, y: i32, width: i32, height: i32, title: &str) -> Result<HWND, CreateWindowError> {
+        let classname = String::from("ryswn").to_pcwstr();
         let hinstance = unsafe { GetModuleHandleW(None) }.unwrap();
 
         let class = unsafe {
@@ -108,14 +111,13 @@ impl NativeWindow {
 
         unsafe { RegisterClassW(&class) };
 
-        let mut userdata = WindowUserData::new(runner);
-        let mut title = String::from(title);
+        let title = String::from(title).to_pcwstr();
 
         let hwnd = match unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 classname,
-                title.to_pcwstr(),
+                title,
                 WS_OVERLAPPEDWINDOW,
                 x,
                 y,
@@ -124,7 +126,7 @@ impl NativeWindow {
                 None,
                 None,
                 hinstance,
-                Some(&mut userdata as *mut _ as _),
+                Some(userdata as *const _ as _),
             )
         } {
             Ok(hwnd) => hwnd,
