@@ -4,6 +4,10 @@ version = { workspace = true }
 edition = "2021"
 description = "Create and handle native windows."
 license = { workspace = true }
+include = [
+  "/src",
+  "/examples",
+]
 
 [dependencies]
 raw-window-handle = { workspace = true }
@@ -16,3 +20,6 @@ windows = { workspace = true, features = [
   "Win32_Graphics_Dwm",
   "Win32_UI_Controls",
 ] }
+
+[[example]]
+name = "window"
